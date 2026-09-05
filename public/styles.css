@@ -38,6 +38,14 @@ button {
  * instead of the real document. The header and tab bar are fixed to the
  * true viewport, and #app gets top/bottom padding to clear them.
  */
+/*
+ * transform: translateZ(0) forces these onto their own GPU-composited
+ * layer. Without it, iOS Safari can visually drop or flicker `position:
+ * fixed` elements mid-scroll — specifically during the address-bar
+ * collapse/expand animation — because they get caught up in the same
+ * repaint batch as the rest of the page instead of being handled
+ * independently. This is the standard, widely-documented fix.
+ */
 .topbar {
   position: fixed;
   top: 0;
@@ -46,6 +54,9 @@ button {
   z-index: 20;
   padding: calc(14px + env(safe-area-inset-top, 0px)) 16px 10px;
   background: var(--cream);
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+  will-change: transform;
 }
 
 .topbar .brand {
@@ -71,6 +82,9 @@ button {
   background: var(--white);
   border-top: 1px solid var(--border);
   padding-bottom: env(safe-area-inset-bottom, 0);
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+  will-change: transform;
 }
 
 body.onboarding-active .tabbar {
@@ -395,6 +409,9 @@ input[type='number'] {
   border-top: 1px solid var(--border);
   padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0));
   gap: 10px;
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+  will-change: transform;
   max-width: 640px;
   margin: 0 auto;
 }
