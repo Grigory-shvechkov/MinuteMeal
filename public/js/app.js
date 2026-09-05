@@ -665,6 +665,7 @@ async function renderMenu(hallId, initialStation = null) {
 
   const tabsHost = el('div', { class: 'tabs-row' });
   const stationHost = el('div', { class: 'chip-row scroll', style: 'margin-top:8px' });
+  const recommendStationHost = el('div', { style: 'margin-top:8px' });
   const autoBuildHost = el('div', { style: 'margin-top:10px' });
   const hintHost = el(
     'p',
@@ -675,6 +676,7 @@ async function renderMenu(hallId, initialStation = null) {
 
   appEl.appendChild(tabsHost);
   appEl.appendChild(stationHost);
+  appEl.appendChild(recommendStationHost);
   appEl.appendChild(autoBuildHost);
   appEl.appendChild(hintHost);
   appEl.appendChild(listHost);
@@ -759,8 +761,13 @@ async function renderMenu(hallId, initialStation = null) {
         )
       );
     });
-    stationHost.appendChild(
-      el('button', { class: 'chip', onclick: recommendStationHandler }, '🔍 Recommend a Station')
+  }
+
+  function drawRecommendStationButton() {
+    recommendStationHost.innerHTML = '';
+    if (availableStations().length === 0) return;
+    recommendStationHost.appendChild(
+      el('button', { class: 'btn btn-secondary', onclick: recommendStationHandler }, '🔍 Recommend a Station')
     );
   }
 
@@ -882,6 +889,7 @@ async function renderMenu(hallId, initialStation = null) {
   function drawAll() {
     drawTabs();
     drawStations();
+    drawRecommendStationButton();
     drawAutoBuild();
     drawList();
     drawTrayBar();
