@@ -1,5 +1,5 @@
 import { DINING_HALLS, fetchAllMenu, fetchHallMenu, fetchHalls } from './api.js';
-import { buildCravingCombo, parseCraving } from './craving.js';
+import { buildCravingCombo, parseCraving, recommendForCraving } from './craving.js';
 import { isHallOpenNow } from './hallHours.js';
 import { currentMealPeriod, mealPeriodLabel, PERIODS } from './mealPeriod.js';
 import {
@@ -481,18 +481,18 @@ async function renderHome() {
     const text = cravingCard._text || '';
     const intent = parseCraving(text.trim());
     const candidateItems = stationFilter ? menuFromOpenHalls.filter(i => i.category === stationFilter) : menuFromOpenHalls;
-    const combo = buildCravingCombo(
-      candidateItems,
-      intent,
-      {
-        remainingCalories: Math.max(store.remainingCalories(), 200),
-        mealPeriod,
-        dietaryPrefs: store.settings.dietaryPrefs,
-        avoidAllergens: store.settings.avoidAllergens,
-      },
-      4
-    );
-    if (combo.length === 0) {
+    const baseOpts = {
+      remainingCalories: Math.max(store.remainingCalories(), 200),
+      mealPeriod,
+      dietaryPrefs: store.settings.dietaryPrefs,
+      avoidAllergens: store.settings.avoidAllergens,
+    };
+
+    // A meal has to come from one dining hall you can actually visit — find
+    // whichever hall has the single best match across everything open, then
+    // build the whole combo from just that hall's items.
+    const topPick = recommendForCraving(candidateItems, intent, baseOpts, 1)[0];
+    if (!topPick) {
       alert(
         stationFilter
           ? `Couldn't find anything at the ${stationFilter} station right now that fits your goals and preferences.`
@@ -500,11 +500,18 @@ async function renderHome() {
       );
       return;
     }
+    const hallItems = candidateItems.filter(i => i.hallId === topPick.hallId);
+    const combo = buildCravingCombo(hallItems, intent, baseOpts, 4);
+    if (combo.length === 0) {
+      alert("Couldn't fit anything at that hall within your remaining calories — try adjusting your goal or craving text.");
+      return;
+    }
+
     openComboModal({
       title: 'Your AI-Built Meal',
-      subtitle: intent.summary,
+      subtitle: `${intent.summary} · ${topPick.hallName}`,
       items: combo,
-      showHallBadge: true,
+      showHallBadge: false,
       onLogged: drawGoalCard,
     });
   }
