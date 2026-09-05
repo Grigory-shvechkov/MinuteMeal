@@ -1,5 +1,5 @@
 import { DINING_HALLS, fetchAllMenu, fetchHallMenu, fetchHalls } from './api.js';
-import { buildCravingCombo, parseCraving, recommendForCraving, recommendStationForCraving } from './craving.js';
+import { buildCravingCombo, parseCraving, recommendForCraving, recommendStationsForCraving } from './craving.js';
 import { isHallOpenNow } from './hallHours.js';
 import { currentMealPeriod, mealPeriodLabel, PERIODS } from './mealPeriod.js';
 import {
@@ -12,7 +12,7 @@ import {
   suggestedCalorieGoal,
   suggestedProteinGoalG,
 } from './nutrition.js';
-import { recommendCombo, recommendItems, recommendStation } from './recommend.js';
+import { recommendCombo, recommendItems, recommendStations } from './recommend.js';
 import { store } from './storage.js';
 
 const appEl = document.getElementById('app');
@@ -422,6 +422,7 @@ async function renderHome() {
   }
 
   let stationFilter = null;
+  let stationRecommendIndex = 0;
   const availableStations = [...new Set(menuFromOpenHalls.filter(i => i.mealPeriod === mealPeriod).map(i => i.category))].sort();
 
   function drawCravingCard() {
@@ -473,7 +474,7 @@ async function renderHome() {
       cravingCard.appendChild(
         el(
           'button',
-          { class: 'chip', style: 'margin-top:8px', onclick: recommendStationHandler },
+          { class: 'btn btn-primary', style: 'margin-top:8px', onclick: recommendStationHandler },
           '🔍 Recommend a Station'
         )
       );
@@ -487,17 +488,18 @@ async function renderHome() {
   function recommendStationHandler() {
     const text = cravingCard._text || '';
     const intent = parseCraving(text.trim());
-    const recommended = recommendStationForCraving(menuFromOpenHalls, intent, {
+    const recommended = recommendStationsForCraving(menuFromOpenHalls, intent, {
       remainingCalories: Math.max(store.remainingCalories(), 200),
       mealPeriod,
       dietaryPrefs: store.settings.dietaryPrefs,
       avoidAllergens: store.settings.avoidAllergens,
-    });
-    if (!recommended) {
+    }, 10);
+    if (recommended.length === 0) {
       alert("Couldn't find a station that fits your goals and preferences right now.");
       return;
     }
-    stationFilter = recommended;
+    stationFilter = recommended[stationRecommendIndex % recommended.length];
+    stationRecommendIndex++;
     drawCravingCard();
   }
 
@@ -628,13 +630,15 @@ async function renderHalls() {
     );
   }
 
+  let recommendIndex = 0;
+
   async function findRecommendation() {
     drawRecommendCard('loading');
     try {
       const menu = await fetchAllMenu();
       const openHallIds = new Set(halls.filter(h => isHallOpenNow(h)).map(h => h.id));
       const openMenu = menu.filter(i => openHallIds.has(i.hallId));
-      const best = recommendItems(
+      const ranked = recommendItems(
         openMenu,
         {
           remainingCalories: Math.max(store.remainingCalories(), 200),
@@ -642,8 +646,21 @@ async function renderHalls() {
           dietaryPrefs: store.settings.dietaryPrefs,
           avoidAllergens: store.settings.avoidAllergens,
         },
-        1
-      )[0];
+        30
+      );
+      // Dedupe by (hall, station) so cycling through picks shows genuinely
+      // different combos, not just a different dish at the same spot.
+      const seen = new Set();
+      const options = [];
+      for (const item of ranked) {
+        const key = `${item.hallId}::${item.category}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          options.push(item);
+        }
+      }
+      const best = options.length > 0 ? options[recommendIndex % options.length] : null;
+      if (best) recommendIndex++;
       drawRecommendCard(best ? 'found' : 'not-found', best);
     } catch (err) {
       drawRecommendCard('error');
@@ -702,6 +719,7 @@ async function renderMenu(hallId, initialStation = null) {
   const initialStationValid =
     initialStation && new Set(items.filter(i => i.mealPeriod === period).map(i => i.category)).has(initialStation);
   let stationFilter = initialStationValid ? initialStation : null;
+  let stationRecommendIndex = 0;
   let mealTray = [];
 
   function drawTabs() {
@@ -715,6 +733,7 @@ async function renderMenu(hallId, initialStation = null) {
             onclick: () => {
               period = p;
               stationFilter = null;
+              stationRecommendIndex = 0;
               mealTray = [];
               drawAll();
             },
@@ -767,23 +786,24 @@ async function renderMenu(hallId, initialStation = null) {
     recommendStationHost.innerHTML = '';
     if (availableStations().length === 0) return;
     recommendStationHost.appendChild(
-      el('button', { class: 'btn btn-secondary', onclick: recommendStationHandler }, '🔍 Recommend a Station')
+      el('button', { class: 'btn btn-primary', onclick: recommendStationHandler }, '🔍 Recommend a Station')
     );
   }
 
   function recommendStationHandler() {
     const periodItems = items.filter(i => i.mealPeriod === period);
-    const recommended = recommendStation(periodItems, {
+    const recommended = recommendStations(periodItems, {
       remainingCalories: Math.max(store.remainingCalories(), 200),
       mealPeriod: period,
       dietaryPrefs: store.settings.dietaryPrefs,
       avoidAllergens: store.settings.avoidAllergens,
-    });
-    if (!recommended) {
+    }, 10);
+    if (recommended.length === 0) {
       alert("Couldn't find a station that fits your goals and preferences for this meal period.");
       return;
     }
-    stationFilter = recommended;
+    stationFilter = recommended[stationRecommendIndex % recommended.length];
+    stationRecommendIndex++;
     drawAll();
   }
 

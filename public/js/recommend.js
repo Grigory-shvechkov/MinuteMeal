@@ -31,12 +31,25 @@ export function recommendItems(items, opts, count = 5) {
   return [...eligible].sort((a, b) => scoreItem(b, opts) - scoreItem(a, opts)).slice(0, count);
 }
 
+/** Food stations ranked by their single best-scoring item, best first. */
+export function recommendStations(items, opts, count = 5) {
+  const eligible = filterForPrefs(items, opts);
+  const bestByStation = new Map();
+  for (const item of eligible) {
+    const score = scoreItem(item, opts);
+    if (!bestByStation.has(item.category) || score > bestByStation.get(item.category)) {
+      bestByStation.set(item.category, score);
+    }
+  }
+  return [...bestByStation.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([station]) => station)
+    .slice(0, count);
+}
+
 /** Which food station has the single best-scoring item right now, or null if nothing qualifies. */
 export function recommendStation(items, opts) {
-  const eligible = filterForPrefs(items, opts);
-  if (eligible.length === 0) return null;
-  const best = [...eligible].sort((a, b) => scoreItem(b, opts) - scoreItem(a, opts))[0];
-  return best.category;
+  return recommendStations(items, opts, 1)[0] ?? null;
 }
 
 /** Greedily builds a small combo of items that fits inside the remaining calorie budget. */

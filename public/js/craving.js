@@ -147,10 +147,24 @@ export function recommendForCraving(items, intent, base, count = 6) {
   return rankedCravingPool(items, intent, base).slice(0, count);
 }
 
+/** Food stations ranked by the craving-scored pool, best first (deduped, first-seen order). */
+export function recommendStationsForCraving(items, intent, base, count = 5) {
+  const pool = rankedCravingPool(items, intent, base);
+  const seen = new Set();
+  const stations = [];
+  for (const item of pool) {
+    if (!seen.has(item.category)) {
+      seen.add(item.category);
+      stations.push(item.category);
+      if (stations.length >= count) break;
+    }
+  }
+  return stations;
+}
+
 /** Which food station best matches the craving intent right now, or null if nothing qualifies. */
 export function recommendStationForCraving(items, intent, base) {
-  const pool = rankedCravingPool(items, intent, base);
-  return pool.length > 0 ? pool[0].category : null;
+  return recommendStationsForCraving(items, intent, base, 1)[0] ?? null;
 }
 
 /** Greedily builds a small combo meal from a craving-ranked pool, filling up to (roughly) the calorie budget. */
