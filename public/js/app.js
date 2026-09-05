@@ -18,6 +18,15 @@ import { store } from './storage.js';
 const appEl = document.getElementById('app');
 const modalRoot = document.getElementById('modal-root');
 
+// Temporary diagnostic: surface any uncaught error visibly instead of
+// silently breaking the page, so we can see exactly what's failing.
+window.addEventListener('error', e => {
+  alert(`JS Error: ${e.message}\nat ${e.filename}:${e.lineno}:${e.colno}`);
+});
+window.addEventListener('unhandledrejection', e => {
+  alert(`Unhandled promise rejection: ${e.reason}`);
+});
+
 function esc(value) {
   return String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
