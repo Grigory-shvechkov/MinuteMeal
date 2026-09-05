@@ -27,6 +27,20 @@ window.addEventListener('unhandledrejection', e => {
   alert(`Unhandled promise rejection: ${e.reason}`);
 });
 
+// WebKit sometimes doesn't correctly apply env(safe-area-inset-*) values on
+// the very first layout pass after a page load, which can leave a
+// position:fixed element positioned as if the inset were still 0 until
+// something forces a fresh layout. Forcing a reflow shortly after load is
+// the standard workaround.
+window.addEventListener('load', () => {
+  setTimeout(() => {
+    const tabbar = document.querySelector('.tabbar');
+    const topbar = document.querySelector('.topbar');
+    if (tabbar) void tabbar.offsetHeight;
+    if (topbar) void topbar.offsetHeight;
+  }, 50);
+});
+
 function esc(value) {
   return String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }

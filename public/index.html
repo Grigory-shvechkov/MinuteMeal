@@ -9,6 +9,33 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="MinuteMeal" />
     <title>MinuteMeal</title>
+    <!--
+      Critical layout for the tab bar, inlined so it applies on the very
+      first paint regardless of when the external stylesheet finishes
+      loading (matters on a cold Render instance, where that request can be
+      slow). Full styling still comes from styles.css; this is just enough
+      to guarantee the bar is positioned and visible immediately.
+    -->
+    <style>
+      nav.tabbar {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        z-index: 20;
+        display: flex;
+        background: #ffffff;
+        min-height: 56px;
+      }
+      header.topbar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 20;
+        background: #faf6f0;
+      }
+    </style>
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
