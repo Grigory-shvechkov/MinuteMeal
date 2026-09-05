@@ -449,6 +449,7 @@ input[type='number'] {
 
 .modal-fullpage-footer {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   padding: 16px 20px calc(16px + env(safe-area-inset-bottom, 0));
   border-top: 1px solid var(--border);

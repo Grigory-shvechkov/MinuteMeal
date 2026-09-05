@@ -490,9 +490,19 @@ async function renderHome() {
 
     // A meal has to come from one dining hall you can actually visit — find
     // whichever hall has the single best match across everything open, then
-    // build the whole combo from just that hall's items.
-    const topPick = recommendForCraving(candidateItems, intent, baseOpts, 1)[0];
-    if (!topPick) {
+    // build the whole combo from just that hall's items. Rerolling excludes
+    // whatever's already been shown so it doesn't just repeat itself.
+    function generate(excludeIds) {
+      const pool = candidateItems.filter(i => !excludeIds.has(i.id));
+      const topPick = recommendForCraving(pool, intent, baseOpts, 1)[0];
+      if (!topPick) return null;
+      const hallItems = pool.filter(i => i.hallId === topPick.hallId);
+      const combo = buildCravingCombo(hallItems, intent, baseOpts, 4);
+      return combo.length > 0 ? { combo, hallName: topPick.hallName } : null;
+    }
+
+    const first = generate(new Set());
+    if (!first) {
       alert(
         stationFilter
           ? `Couldn't find anything at the ${stationFilter} station right now that fits your goals and preferences.`
@@ -500,19 +510,21 @@ async function renderHome() {
       );
       return;
     }
-    const hallItems = candidateItems.filter(i => i.hallId === topPick.hallId);
-    const combo = buildCravingCombo(hallItems, intent, baseOpts, 4);
-    if (combo.length === 0) {
-      alert("Couldn't fit anything at that hall within your remaining calories — try adjusting your goal or craving text.");
-      return;
-    }
+
+    let excluded = new Set(first.combo.map(i => i.id));
 
     openComboModal({
       title: 'Your AI-Built Meal',
-      subtitle: `${intent.summary} · ${topPick.hallName}`,
-      items: combo,
+      subtitle: `${intent.summary} · ${first.hallName}`,
+      items: first.combo,
       showHallBadge: false,
       onLogged: drawGoalCard,
+      onReroll: () => {
+        const next = generate(excluded);
+        if (!next) return null;
+        excluded = new Set([...excluded, ...next.combo.map(i => i.id)]);
+        return { items: next.combo, subtitle: `${intent.summary} · ${next.hallName}` };
+      },
     });
   }
 
@@ -716,13 +728,19 @@ async function renderMenu(hallId, initialStation = null) {
 
   function autoBuildMeal() {
     const periodItems = items.filter(i => i.mealPeriod === period && (!stationFilter || i.category === stationFilter));
-    const combo = recommendCombo(periodItems, {
+    const opts = {
       remainingCalories: Math.max(store.remainingCalories(), 200),
       mealPeriod: period,
       dietaryPrefs: store.settings.dietaryPrefs,
       avoidAllergens: store.settings.avoidAllergens,
-    });
-    if (combo.length === 0) {
+    };
+
+    function generate(excludeIds) {
+      return recommendCombo(periodItems.filter(i => !excludeIds.has(i.id)), opts);
+    }
+
+    const first = generate(new Set());
+    if (first.length === 0) {
       alert(
         stationFilter
           ? `Couldn't find items at the ${stationFilter} station that fit your goals and preferences.`
@@ -730,12 +748,21 @@ async function renderMenu(hallId, initialStation = null) {
       );
       return;
     }
+
+    let excluded = new Set(first.map(i => i.id));
+
     openComboModal({
       title: 'Your Auto-Built Meal',
       subtitle: hall ? hall.name : '',
-      items: combo,
+      items: first,
       showHallBadge: false,
       onLogged: () => {},
+      onReroll: () => {
+        const next = generate(excluded);
+        if (next.length === 0) return null;
+        excluded = new Set([...excluded, ...next.map(i => i.id)]);
+        return { items: next };
+      },
     });
   }
 
@@ -873,8 +900,9 @@ function openItemDetailModal(item, { isInTray, toggleTray, drawList, drawTrayBar
   modalRoot.appendChild(el('div', { class: 'modal-backdrop', onclick: e => { if (e.target === e.currentTarget) closeModal(); } }, [sheet]));
 }
 
-function openComboModal({ title, subtitle, items, showHallBadge, onLogged }) {
+function openComboModal({ title, subtitle, items, showHallBadge, onLogged, onReroll }) {
   let combo = [...items];
+  let currentSubtitle = subtitle;
 
   function totals() {
     return {
@@ -940,6 +968,25 @@ function openComboModal({ title, subtitle, items, showHallBadge, onLogged }) {
         },
         'Discard'
       ),
+      onReroll
+        ? el(
+            'button',
+            {
+              class: 'btn btn-secondary',
+              onclick: () => {
+                const result = onReroll(combo);
+                if (!result || !result.items || result.items.length === 0) {
+                  alert('No more alternatives right now — try adjusting your goals or preferences.');
+                  return;
+                }
+                combo = result.items;
+                if (result.subtitle) currentSubtitle = result.subtitle;
+                draw();
+              },
+            },
+            '🎲 Reroll'
+          )
+        : null,
       el(
         'button',
         {
@@ -963,7 +1010,7 @@ function openComboModal({ title, subtitle, items, showHallBadge, onLogged }) {
         el('div', { style: 'display:flex;justify-content:space-between;align-items:flex-start' }, [
           el('div', {}, [
             el('div', { class: 'modal-title' }, title),
-            el('div', { class: 'modal-subtitle' }, subtitle || ''),
+            el('div', { class: 'modal-subtitle' }, currentSubtitle || ''),
           ]),
           el('button', { class: 'btn-danger-text', style: 'color:var(--maroon);white-space:nowrap', onclick: closeModal }, '‹ Back'),
         ]),
