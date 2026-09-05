@@ -1,5 +1,5 @@
 import { DINING_HALLS, fetchAllMenu, fetchHallMenu, fetchHalls } from './api.js';
-import { buildCravingCombo, parseCraving, recommendForCraving } from './craving.js';
+import { buildCravingCombo, parseCraving, recommendForCraving, recommendStationForCraving } from './craving.js';
 import { isHallOpenNow } from './hallHours.js';
 import { currentMealPeriod, mealPeriodLabel, PERIODS } from './mealPeriod.js';
 import {
@@ -12,7 +12,7 @@ import {
   suggestedCalorieGoal,
   suggestedProteinGoalG,
 } from './nutrition.js';
-import { recommendCombo } from './recommend.js';
+import { recommendCombo, recommendStation } from './recommend.js';
 import { store } from './storage.js';
 
 const appEl = document.getElementById('app');
@@ -470,11 +470,35 @@ async function renderHome() {
         ),
       ]);
       cravingCard.appendChild(row);
+      cravingCard.appendChild(
+        el(
+          'button',
+          { class: 'chip', style: 'margin-top:8px', onclick: recommendStationHandler },
+          '🔍 Recommend a Station'
+        )
+      );
     }
 
     cravingCard.appendChild(
       el('button', { class: 'btn btn-primary', style: 'margin-top:10px', onclick: buildMeal }, '✨ Build My Meal')
     );
+  }
+
+  function recommendStationHandler() {
+    const text = cravingCard._text || '';
+    const intent = parseCraving(text.trim());
+    const recommended = recommendStationForCraving(menuFromOpenHalls, intent, {
+      remainingCalories: Math.max(store.remainingCalories(), 200),
+      mealPeriod,
+      dietaryPrefs: store.settings.dietaryPrefs,
+      avoidAllergens: store.settings.avoidAllergens,
+    });
+    if (!recommended) {
+      alert("Couldn't find a station that fits your goals and preferences right now.");
+      return;
+    }
+    stationFilter = recommended;
+    drawCravingCard();
   }
 
   function buildMeal() {
@@ -644,6 +668,25 @@ async function renderMenu(hallId) {
         )
       );
     });
+    stationHost.appendChild(
+      el('button', { class: 'chip', onclick: recommendStationHandler }, '🔍 Recommend a Station')
+    );
+  }
+
+  function recommendStationHandler() {
+    const periodItems = items.filter(i => i.mealPeriod === period);
+    const recommended = recommendStation(periodItems, {
+      remainingCalories: Math.max(store.remainingCalories(), 200),
+      mealPeriod: period,
+      dietaryPrefs: store.settings.dietaryPrefs,
+      avoidAllergens: store.settings.avoidAllergens,
+    });
+    if (!recommended) {
+      alert("Couldn't find a station that fits your goals and preferences for this meal period.");
+      return;
+    }
+    stationFilter = recommended;
+    drawAll();
   }
 
   function drawAutoBuild() {

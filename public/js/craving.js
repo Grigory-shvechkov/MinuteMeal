@@ -147,6 +147,12 @@ export function recommendForCraving(items, intent, base, count = 6) {
   return rankedCravingPool(items, intent, base).slice(0, count);
 }
 
+/** Which food station best matches the craving intent right now, or null if nothing qualifies. */
+export function recommendStationForCraving(items, intent, base) {
+  const pool = rankedCravingPool(items, intent, base);
+  return pool.length > 0 ? pool[0].category : null;
+}
+
 /** Greedily builds a small combo meal from a craving-ranked pool, filling up to (roughly) the calorie budget. */
 export function buildCravingCombo(items, intent, base, maxItems = 4) {
   const pool = rankedCravingPool(items, intent, base);

@@ -31,6 +31,14 @@ export function recommendItems(items, opts, count = 5) {
   return [...eligible].sort((a, b) => scoreItem(b, opts) - scoreItem(a, opts)).slice(0, count);
 }
 
+/** Which food station has the single best-scoring item right now, or null if nothing qualifies. */
+export function recommendStation(items, opts) {
+  const eligible = filterForPrefs(items, opts);
+  if (eligible.length === 0) return null;
+  const best = [...eligible].sort((a, b) => scoreItem(b, opts) - scoreItem(a, opts))[0];
+  return best.category;
+}
+
 /** Greedily builds a small combo of items that fits inside the remaining calorie budget. */
 export function recommendCombo(items, opts, maxItems = 4) {
   const eligible = filterForPrefs(items, opts).sort((a, b) => scoreItem(b, opts) - scoreItem(a, opts));
