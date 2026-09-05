@@ -578,7 +578,12 @@ async function renderMenu(hallId) {
 
   const availablePeriodsSet = new Set(items.map(i => i.mealPeriod));
   const availablePeriods = PERIODS.filter(p => availablePeriodsSet.has(p));
-  let period = availablePeriods.length ? availablePeriods[0] : 'lunch';
+  // Default to whatever meal period matches the current time of day, not just
+  // whichever period happens to come first — a hall's "breakfast" bucket can
+  // be nearly empty on weekends (real brunch items get filed under "lunch"
+  // instead), so picking the first available period isn't a reliable default.
+  const preferredPeriod = currentMealPeriod();
+  let period = availablePeriodsSet.has(preferredPeriod) ? preferredPeriod : availablePeriods.length ? availablePeriods[0] : 'lunch';
   let stationFilter = null;
   let mealTray = [];
 
@@ -893,8 +898,13 @@ function openComboModal({ title, subtitle, items, showHallBadge, onLogged }) {
 
     const sheet = el('div', { class: 'modal-sheet fullpage' }, [
       el('div', { class: 'modal-fullpage-header' }, [
-        el('div', { class: 'modal-title' }, title),
-        el('div', { class: 'modal-subtitle' }, subtitle || ''),
+        el('div', { style: 'display:flex;justify-content:space-between;align-items:flex-start' }, [
+          el('div', {}, [
+            el('div', { class: 'modal-title' }, title),
+            el('div', { class: 'modal-subtitle' }, subtitle || ''),
+          ]),
+          el('button', { class: 'btn-danger-text', style: 'color:var(--maroon);white-space:nowrap', onclick: closeModal }, '‹ Back'),
+        ]),
       ]),
       body,
       footer,
