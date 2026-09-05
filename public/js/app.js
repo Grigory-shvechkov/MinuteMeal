@@ -12,7 +12,7 @@ import {
   suggestedCalorieGoal,
   suggestedProteinGoalG,
 } from './nutrition.js';
-import { recommendCombo, recommendStation } from './recommend.js';
+import { recommendCombo, recommendItems, recommendStation } from './recommend.js';
 import { store } from './storage.js';
 
 const appEl = document.getElementById('app');
@@ -53,8 +53,8 @@ const ROUTE_HANDLERS = { home: renderHome, halls: renderHalls, diary: renderDiar
 
 function currentRoute() {
   const hash = location.hash.replace('#', '') || 'home';
-  const [route, param] = hash.split('/');
-  return { route, param };
+  const [route, param, extra] = hash.split('/');
+  return { route, param, extra: extra ? decodeURIComponent(extra) : null };
 }
 
 async function render() {
@@ -67,7 +67,7 @@ async function render() {
   }
   document.body.classList.remove('onboarding-active');
 
-  const { route, param } = currentRoute();
+  const { route, param, extra } = currentRoute();
   document.querySelectorAll('.tabbar button').forEach(b => {
     const active = b.dataset.route === route || (route === 'menu' && b.dataset.route === 'halls');
     b.classList.toggle('active', active);
@@ -78,7 +78,7 @@ async function render() {
 
   try {
     if (route === 'menu') {
-      await renderMenu(parseInt(param, 10));
+      await renderMenu(parseInt(param, 10), extra);
     } else if (ROUTE_HANDLERS[route]) {
       await ROUTE_HANDLERS[route]();
     } else {
@@ -97,8 +97,8 @@ document.querySelectorAll('.tabbar button').forEach(btn => {
   });
 });
 
-function navigateToMenu(hallId) {
-  location.hash = `#menu/${hallId}`;
+function navigateToMenu(hallId, station) {
+  location.hash = station ? `#menu/${hallId}/${encodeURIComponent(station)}` : `#menu/${hallId}`;
 }
 
 // ---------- Onboarding ----------
@@ -541,32 +541,121 @@ async function renderHome() {
 async function renderHalls() {
   appEl.innerHTML = '';
   appEl.appendChild(el('h1', { class: 'page-title' }, 'Dining Halls'));
+
+  const recommendCard = el('div', { class: 'card' });
+  appEl.appendChild(recommendCard);
+
   const listHost = el('div', {});
   appEl.appendChild(listHost);
   listHost.appendChild(el('p', { class: 'empty-text' }, 'Loading…'));
 
+  let halls = [];
   try {
-    const halls = await fetchHalls();
-    listHost.innerHTML = '';
-    halls.forEach(hall => {
-      const open = isHallOpenNow(hall);
-      listHost.appendChild(
-        el('div', { class: 'hall-item', onclick: () => navigateToMenu(hall.id) }, [
-          el('div', { class: 'hall-name' }, hall.name),
-          el('div', { class: 'hall-hours' }, hall.open24 ? 'Open 24 hours' : `${hall.openingHours} – ${hall.closingHours}`),
-          el('div', { class: `status-badge ${open ? 'status-open' : 'status-closed'}` }, open ? 'Open now' : 'Closed now'),
-        ])
-      );
-    });
+    halls = await fetchHalls();
   } catch (err) {
     listHost.innerHTML = '';
     listHost.appendChild(el('p', { class: 'error-text' }, 'Could not load dining halls right now.'));
+    return;
   }
+
+  listHost.innerHTML = '';
+  halls.forEach(hall => {
+    const open = isHallOpenNow(hall);
+    listHost.appendChild(
+      el('div', { class: 'hall-item', onclick: () => navigateToMenu(hall.id) }, [
+        el('div', { class: 'hall-name' }, hall.name),
+        el('div', { class: 'hall-hours' }, hall.open24 ? 'Open 24 hours' : `${hall.openingHours} – ${hall.closingHours}`),
+        el('div', { class: `status-badge ${open ? 'status-open' : 'status-closed'}` }, open ? 'Open now' : 'Closed now'),
+      ])
+    );
+  });
+
+  // state: 'idle' | 'loading' | 'found' | 'not-found' | 'error'
+  function drawRecommendCard(state, result) {
+    recommendCard.innerHTML = '';
+    recommendCard.appendChild(el('div', { class: 'label-eyebrow' }, 'Not sure where to go?'));
+
+    if (state === 'loading') {
+      recommendCard.appendChild(el('p', { class: 'hint', style: 'margin-top:0' }, 'Finding the best station…'));
+      return;
+    }
+
+    if (state === 'error') {
+      recommendCard.appendChild(el('p', { class: 'error-text', style: 'margin-top:0' }, 'Could not fetch live menus right now.'));
+      recommendCard.appendChild(
+        el('button', { class: 'btn btn-primary', onclick: findRecommendation }, '🔍 Recommend a Station')
+      );
+      return;
+    }
+
+    if (state === 'not-found') {
+      recommendCard.appendChild(
+        el('p', { class: 'hint', style: 'margin-top:0' }, 'No open hall has a station that fits your goals and preferences right now.')
+      );
+      recommendCard.appendChild(
+        el('button', { class: 'btn btn-primary', onclick: findRecommendation }, '🔍 Recommend a Station')
+      );
+      return;
+    }
+
+    if (state === 'found') {
+      recommendCard.appendChild(
+        el('p', { class: 'profile-summary', style: 'margin-top:0' }, [
+          el('strong', {}, result.category),
+          document.createTextNode(` at ${result.hallName} — `),
+          document.createTextNode(`e.g. ${result.name} (${result.calories} cal, ${result.proteinG}g protein)`),
+        ])
+      );
+      recommendCard.appendChild(
+        el(
+          'button',
+          { class: 'btn btn-primary', onclick: () => navigateToMenu(result.hallId, result.category) },
+          `Go to ${result.category}`
+        )
+      );
+      recommendCard.appendChild(
+        el('button', { class: 'btn btn-secondary', style: 'width:100%;margin-top:8px', onclick: findRecommendation }, 'Try Again')
+      );
+      return;
+    }
+
+    // idle
+    recommendCard.appendChild(
+      el('p', { class: 'hint', style: 'margin-top:0' }, 'Get a single recommended station — picked from every open hall — based on your goals and preferences.')
+    );
+    recommendCard.appendChild(
+      el('button', { class: 'btn btn-primary', onclick: findRecommendation }, '🔍 Recommend a Station')
+    );
+  }
+
+  async function findRecommendation() {
+    drawRecommendCard('loading');
+    try {
+      const menu = await fetchAllMenu();
+      const openHallIds = new Set(halls.filter(h => isHallOpenNow(h)).map(h => h.id));
+      const openMenu = menu.filter(i => openHallIds.has(i.hallId));
+      const best = recommendItems(
+        openMenu,
+        {
+          remainingCalories: Math.max(store.remainingCalories(), 200),
+          mealPeriod: currentMealPeriod(),
+          dietaryPrefs: store.settings.dietaryPrefs,
+          avoidAllergens: store.settings.avoidAllergens,
+        },
+        1
+      )[0];
+      drawRecommendCard(best ? 'found' : 'not-found', best);
+    } catch (err) {
+      drawRecommendCard('error');
+    }
+  }
+
+  drawRecommendCard('idle');
 }
 
 // ---------- Menu (per hall) ----------
 
-async function renderMenu(hallId) {
+async function renderMenu(hallId, initialStation = null) {
   const hall = DINING_HALLS.find(h => h.id === hallId);
   appEl.innerHTML = '';
   appEl.appendChild(
@@ -608,7 +697,9 @@ async function renderMenu(hallId) {
   // instead), so picking the first available period isn't a reliable default.
   const preferredPeriod = currentMealPeriod();
   let period = availablePeriodsSet.has(preferredPeriod) ? preferredPeriod : availablePeriods.length ? availablePeriods[0] : 'lunch';
-  let stationFilter = null;
+  const initialStationValid =
+    initialStation && new Set(items.filter(i => i.mealPeriod === period).map(i => i.category)).has(initialStation);
+  let stationFilter = initialStationValid ? initialStation : null;
   let mealTray = [];
 
   function drawTabs() {
