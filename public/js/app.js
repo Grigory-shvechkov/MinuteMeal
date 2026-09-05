@@ -1,5 +1,5 @@
 import { DINING_HALLS, fetchAllMenu, fetchHallMenu, fetchHalls } from './api.js';
-import { buildCravingCombo, parseCraving, recommendForCraving, recommendStationsForCraving } from './craving.js';
+import { buildCravingCombo, parseCraving } from './craving.js';
 import { isHallOpenNow } from './hallHours.js';
 import { currentMealPeriod, mealPeriodLabel, PERIODS } from './mealPeriod.js';
 import {
@@ -422,7 +422,6 @@ async function renderHome() {
   }
 
   let stationFilter = null;
-  let stationRecommendIndex = 0;
   const availableStations = [...new Set(menuFromOpenHalls.filter(i => i.mealPeriod === mealPeriod).map(i => i.category))].sort();
 
   function drawCravingCard() {
@@ -451,7 +450,6 @@ async function renderHome() {
             class: `chip ${!stationFilter ? 'active' : ''}`,
             onclick: () => {
               stationFilter = null;
-              stationRecommendIndex = 0;
               drawCravingCard();
             },
           },
@@ -472,53 +470,11 @@ async function renderHome() {
         ),
       ]);
       cravingCard.appendChild(row);
-      if (stationFilter) {
-        cravingCard.appendChild(
-          el(
-            'button',
-            {
-              class: 'btn btn-secondary',
-              style: 'margin-top:8px;margin-right:8px',
-              onclick: () => {
-                stationFilter = null;
-                stationRecommendIndex = 0;
-                drawCravingCard();
-              },
-            },
-            '‹ Back to Any Station'
-          )
-        );
-      }
-      cravingCard.appendChild(
-        el(
-          'button',
-          { class: 'btn btn-primary', style: 'margin-top:8px', onclick: recommendStationHandler },
-          '🔍 Recommend a Station'
-        )
-      );
     }
 
     cravingCard.appendChild(
       el('button', { class: 'btn btn-primary', style: 'margin-top:10px', onclick: buildMeal }, '✨ Build My Meal')
     );
-  }
-
-  function recommendStationHandler() {
-    const text = cravingCard._text || '';
-    const intent = parseCraving(text.trim());
-    const recommended = recommendStationsForCraving(menuFromOpenHalls, intent, {
-      remainingCalories: Math.max(store.remainingCalories(), 200),
-      mealPeriod,
-      dietaryPrefs: store.settings.dietaryPrefs,
-      avoidAllergens: store.settings.avoidAllergens,
-    }, 10);
-    if (recommended.length === 0) {
-      alert("Couldn't find a station that fits your goals and preferences right now.");
-      return;
-    }
-    stationFilter = recommended[stationRecommendIndex % recommended.length];
-    stationRecommendIndex++;
-    drawCravingCard();
   }
 
   function buildMeal() {
